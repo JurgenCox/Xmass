@@ -1,0 +1,81 @@
+body {
+  background-color: black;
+}
+.divheader {
+  border: 5px outset #164A41;
+  background-color: #164A41;
+  text-align: center;
+}
+.divtabs {
+  border: 5px outset #164A41;
+  background-color: #164A41;
+  text-align: center;
+}
+h1 {
+  color: white;
+  font-size: 30px;
+}
+h2 {
+  color: white;
+  font-size: 20px;
+}
+h3 {
+  color: white;
+  font-size: 10px;
+}
+body {font-family: Arial;}
+
+/* Style the tab */
+.tab {
+  overflow: hidden;
+  border: 1px solid #ccc;
+  background-color: #4D774E;
+}
+
+/* Style the buttons inside the tab */
+.tab button {
+  background-color: #4D774E;
+  float: left;
+  border: none;
+  outline: none;
+  cursor: pointer;
+  padding: 14px 16px;
+  transition: 0.3s;
+  font-size: 17px;
+}
+.button_submit {
+  background-color: white;
+  color: black;
+  border: 2px solid #4CAF50; /* Green */
+  padding: 8px 8px;;
+}
+.button_submit:hover {
+  background-color: #4CAF50; /* Green */
+  color: white;
+}
+
+/* Change background color of buttons on hover */
+.tab button:hover {
+  background-color: #ddd;
+}
+
+/* Create an active/current tablink class */
+.tab button.active {
+  background-color: #9DC88D;
+}
+
+/* Style the tab content */
+.tabcontent {
+  display: none;
+  padding: 6px 12px;
+  border: 1px solid #ccc;
+  border-top: none;
+  background-color: #9DC88D;
+
+.hide { display: none; }
+
+table.display {
+    width: 60%;
+    margin: 0;  /* <- works for me this way ****/
+}
+
