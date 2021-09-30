@@ -57,7 +57,8 @@ class RetentionTimePrediction:
 
     def get_retentiontime_model(self):
         model = keras.models.Sequential()
-        model.add(keras.layers.Embedding(21, 60, input_length=50))
+        model.add(keras.layers.Embedding(23, 60, input_length=50))
+        print("changed to 23")
         model.add(keras.layers.Bidirectional(keras.layers.LSTM(60, return_sequences=True), name='Layer_Bidirectional_1'))
         model.add(keras.layers.LSTM(60, dropout=0.4, recurrent_dropout=0.01, return_sequences=True, name='Layer_LSTM_1'))
         model.add(keras.layers.LSTM(60, dropout=0.4, recurrent_dropout=0.01, name='Layer_LSTM_2'))
@@ -77,10 +78,11 @@ class RetentionTimePrediction:
         #####
 
         df = pd.DataFrame(list(zip(self.peptides, self.retention_times)), columns=['sequence', 'retention_time'])
+        print(df)
         df_training = df.append(df, ignore_index=True).drop_duplicates()
         self.tokenizer= Tokenizer(num_words=None, char_level=True)
         self.tokenizer.fit_on_texts(df_training['sequence'].values)
-        X = self.tokenizer .texts_to_sequences(df_training['sequence'].values)
+        X = self.tokenizer.texts_to_sequences(df_training['sequence'].values)
         X = pad_sequences(X, maxlen=50)
         tokenizer_json = self.tokenizer.to_json()
         with io.open(Path(path,"tokenizer.json"), 'w', encoding='utf-8') as f:
@@ -91,6 +93,21 @@ class RetentionTimePrediction:
 
         self.X_test, self.X_validation, self.Y_test, self.Y_validation = train_test_split(self.X_test_aux, self.Y_test_aux, test_size=0.50,
                                                                       random_state= self.random_state)
+
+        X_train_seq, X_test_aux_seq, Y_train_seq, Y_test_aux_seq = train_test_split(df_training['sequence'],
+                                                                                        df_training['retention_time'],
+                                                                                        test_size=self.test_size,
+                                                                                        random_state=self.random_state)
+
+        X_test_seq, X_validation_seq, Y_test_seq, Y_validation_seq = train_test_split(X_test_aux_seq,
+                                                                                          self.Y_test_aux,
+                                                                                          test_size=0.50,
+                                                                                          random_state=self.random_state)
+        print("What??")
+        print(X_test_seq)
+        print(Y_test_seq)
+        print("What??........")
+
     def train(self):
         self.model = self.get_retentiontime_model()
         metrics_callback = MetricsCallback(validation_data=(self.X_validation, self.Y_validation),
@@ -101,7 +118,6 @@ class RetentionTimePrediction:
                             validation_data=(self.X_validation, self.Y_validation),
                             callbacks=[metrics_callback, record_losses])
     def predict(self, peptides):
-        print("Predicting")
         print (peptides)
         X = self.tokenizer.texts_to_sequences(peptides)
         X = pad_sequences(X, maxlen=50)
@@ -111,6 +127,7 @@ class RetentionTimePrediction:
         return self.model.predict(peptides_fv)
 
     def predict_fromSavedModel(self, peptides, path):
+        predictions=[]
         with open(Path(path,"tokenizer.json")) as f:
             data = json.load(f)
             loaded_tokenizer = tokenizer_from_json(data)
@@ -118,7 +135,20 @@ class RetentionTimePrediction:
             feature_matrix = pad_sequences(feature_matrix, maxlen=50)
             reconstructed_model = keras.models.load_model(Path(path,"model_rt.h5"))
             predictions=reconstructed_model.predict(feature_matrix)
-            print(predictions)
+        return(predictions)
+
+    def predict_fromSavedModel1(self, peptides, path):
+        predictions = []
+        with open(Path(path, "tokenizer.json")) as f:
+            data = json.load(f)
+            loaded_tokenizer = tokenizer_from_json(data)
+            feature_matrix = loaded_tokenizer.texts_to_sequences(peptides)
+            feature_matrix = pad_sequences(feature_matrix, maxlen=50)
+            print(feature_matrix)
+            print(feature_matrix.shape)
+            reconstructed_model = keras.models.load_model(Path(path, "model_rt.h5"),compile=False)
+            predictions = reconstructed_model.predict(feature_matrix)
+        return (predictions)
 
     def save(self, path):
         print("Saving Retention Time model:")

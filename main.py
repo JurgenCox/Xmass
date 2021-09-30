@@ -1,4 +1,4 @@
-from flask import Flask, request
+from flask import Flask, request, send_file
 from flask import render_template
 from sklearn.model_selection import train_test_split
 import windowfeatures as wf
@@ -18,6 +18,8 @@ import plot_figures_model as myplt
 import base64
 from scipy.stats.stats import pearsonr
 from pathlib import Path
+from keras.backend import manual_variable_initialization
+#manual_variable_initialization(True)
 
 # create the Flask app
 app = Flask(__name__)
@@ -36,6 +38,11 @@ def expSVRPrediction(lstpred):
 def index():
     return render_template("index.html")
 
+@app.route('/download')
+def download_file():
+    filename = Path("download","xmass_template.txt")
+    return send_file(filename, as_attachment=True)
+
 @app.route('/load_list_models', methods=['POST','GET'])
 def load_list_models():
     path_models= Path("models")
@@ -48,9 +55,12 @@ def get_image_rt():
     print("Get Retention Time image for model:"+model_name)
     encoded_string=""
     filename = Path("models",model_name,"graph_rt.png")
-    with open(filename, "rb") as image_file:
-        encoded_string = base64.b64encode(image_file.read()).decode("utf-8")
-    return json.dumps({'status': True, 'image': encoded_string})
+    if os.path.exists(filename):
+        with open(filename, "rb") as image_file:
+            encoded_string = base64.b64encode(image_file.read()).decode("utf-8")
+        return json.dumps({'status': 'ok', 'image': encoded_string})
+    else:
+        return json.dumps({'status': 'error', 'message': 'Image does not exists','image': ''})
 
 @app.route('/get_image_msms', methods=['POST','GET'])
 def get_image_msms():
@@ -58,11 +68,14 @@ def get_image_msms():
     print("Get MSMS image for model:"+model_name)
     encoded_string=""
     filename = Path("models",model_name,"graph_msms.png")
-    with open(filename, "rb") as image_file:
-        encoded_string = base64.b64encode(image_file.read()).decode("utf-8")
-    return json.dumps({'status': True, 'image': encoded_string})
+    if os.path.exists(filename):
+        with open(filename, "rb") as image_file:
+            encoded_string = base64.b64encode(image_file.read()).decode("utf-8")
+        return json.dumps({'status': 'ok', 'image': encoded_string})
+    else:
+        return json.dumps({'status': 'error', 'message': 'Image does not exists','image': ''})
 
-@app.route('/train_unique', methods=['POST','GET'])
+@app.route('/train_unique', methods=['POST'])
 def train_unique():
     if request.method == 'POST':
         path = request.form['local_path']
@@ -73,20 +86,20 @@ def train_unique():
         path_api = Path("models",rest_api_name)
         flag_msms = request.form['msms']
         flag_rt = request.form['rt']
-        if andromeda_score == "":
-            andromeda_score = 0
+        current_directory = os.getcwd()
+        final_directory = os.path.join(current_directory, "models", rest_api_name)
+        if rest_api_name.strip() =="":
+            return dict({'status': 'error', 'message': 'Please provide a name for the REST API'})
+        if os.path.exists(final_directory):
+            return dict({'status': 'error', 'message': 'REST API: '+rest_api_name+', already exists'})
         try:
-            current_directory = os.getcwd()
-            final_directory = os.path.join(current_directory, "models", rest_api_name)
             if not os.path.exists(final_directory):
                 os.makedirs(final_directory)
         except OSError:
             message="Creation of the directory %s failed" % final_directory
             print ("ERROR:"+message)
-            return json.dumps({'status': False, 'message': message})
-        else:
-            print("Successfully created the directory %s " % final_directory)
-            # Collecting MSMS spectra for training
+            return dict({'status': 'error', 'message': message})
+        print("Successfully created the directory %s " % final_directory)
         lstMSMSfiles = []
         appended_data = []
         for root, dirs, files in os.walk(path):
@@ -115,30 +128,34 @@ def train_unique():
         # Filtering unique sequences by max Andromeda Score
         idx1= df_peptides_train.groupby(['Sequence'])['Score'].transform(max)==df_peptides_train['Score']
         df_maxScore = df_peptides_train[idx1][['Sequence','Matches','Intensities']]
-        start_time = time.time()
-        feature_matrix_x = []
-        target_y = []
-        target_b = []
-        # Splitting data into training and testing
-        train_msms, test_aux_msms = train_test_split(df_maxScore, test_size=0.2, random_state=42)
-        test_msms, validation_msms = train_test_split(test_aux_msms, test_size=0.5 , random_state=42)
-        print ("Shapes")
-        print("Train"+str(len(train_msms)))
-        print("Validation"+str(len(test_msms)))
-        print("Test"+str(len(validation_msms)))
 
-        for index, row in train_msms.iterrows():
-            myTrainingMatrix = wf.createWindowData(row["Sequence"], row["Matches"], row["Intensities"])
-            myTrainingMatrix.GenerateMatrix(24)
-            d = myTrainingMatrix.GenerateDataset(removeZeros=False)
-            for i in range(0, len(d['target_Y'])):
-                feature_matrix_x.append(d['featureMatrix'][i])
-                target_y.append(np.log2(1 + (1000 * d['target_Y'][i])))
-                target_b.append(np.log2(1 + (1000 * d['target_B'][i])))
-        print("--- Creating feature Matrix %s seconds ---" % (time.time() - start_time))
 
         if flag_msms == "1":
             # %%
+            start_time = time.time()
+            feature_matrix_x = []
+            target_y = []
+            target_b = []
+            # Splitting data into training and testing
+            train_msms, test_aux_msms = train_test_split(df_maxScore, test_size=0.2, random_state=42)
+            test_msms, validation_msms = train_test_split(test_aux_msms, test_size=0.5, random_state=42)
+            print("Shapes")
+            print("Train" + str(len(train_msms)))
+            print("Validation" + str(len(test_msms)))
+            print("Test" + str(len(validation_msms)))
+
+            for index, row in train_msms.iterrows():
+                myTrainingMatrix = wf.createWindowData(row["Sequence"], row["Matches"], row["Intensities"])
+                myTrainingMatrix.GenerateMatrix(24)
+                d = myTrainingMatrix.GenerateDataset(removeZeros=False)
+                for i in range(0, len(d['target_Y'])):
+                    feature_matrix_x.append(d['featureMatrix'][i])
+                    target_y.append(np.log2(1 + (1000 * d['target_Y'][i])))
+                    target_b.append(np.log2(1 + (1000 * d['target_B'][i])))
+            print("--- Creating feature Matrix %s seconds ---" % (time.time() - start_time))
+
+            ###
+
             model_y = XGBRegressor(
                 max_depth=8, learning_rate=0.1, n_estimators=50,
                 objective="reg:linear",
@@ -226,11 +243,20 @@ def train_unique():
 
             # Training retention Time
             # Filtering unique sequences by max Andromeda Score
-            idx1 = df_peptides_train.groupby(['Sequence'])['Score'].transform(max) == df_peptides_train['Score']
+            print ("Antes:")
+            print (df_peptides_train)
+            print("Columns:")
             print(df_peptides_train.keys())
+            print ("Despues")
+
+            idx1 = df_peptides_train.groupby(['Sequence'])['Score'].transform(max) == df_peptides_train['Score']
+            print (len(idx1))
+            print(idx1)
             df_maxScoreRT = df_peptides_train[idx1][['Sequence', 'Matches', 'Retention time']]
             max_rt = max(df_maxScoreRT["Retention time"])
+            df_maxScoreRT["Retention time aux"] = df_maxScoreRT["Retention time"]
             df_maxScoreRT["Retention time"] = df_maxScoreRT["Retention time"] / max_rt
+            print (df_maxScoreRT)
             peptides = df_maxScoreRT["Sequence"].to_list()
             retention_times= df_maxScoreRT["Retention time"].to_list()
             # Initializing class, you can change different parameters like number of epochs, batch size etc, before training
@@ -238,7 +264,7 @@ def train_unique():
             RTP.epochs = 20
             # RTP.epochs <- Example changing number of epochs (the default is 40 ). You have to do it before training
             RTP.train()
-            RTP.save(Path(final_directory,"model_rt.h5"))
+            RTP.model.save(Path(final_directory,"model_rt.h5"))
             a_file = open(Path(final_directory,"max_rt.json"), "w")
             d=dict()
 
@@ -261,15 +287,21 @@ def train_unique():
 
             print("?"+final_directory)
             myplt.plot_retention_time(final_directory)
-        return ""
+        return json.dumps({'status': 'ok', 'message': 'The model was succesfully created!'})
 
 
-@app.route('/select_folder_training', methods=['POST','GET'])
+@app.route('/select_folder_training', methods=['POST'])
 def select_folder_training():
     if request.method == 'POST':
         path = request.form['local_path']
         andromeda_score = request.form['andromeda_score']
-        print ("")
+        print(path)
+        if (path.strip()) == "":
+            return dict({'status': 'error',
+                         'message': 'Path of the location folder is empty.'})
+        if os.path.exists(path) ==False:
+            return dict({'status':'error', 'message':'Path of the location folder does not exists. Please be sure the computer where is XMASS located has access to it.'})
+        print ("Androme Score:")
         print (andromeda_score)
         if andromeda_score=="":
             andromeda_score= 0
@@ -280,6 +312,11 @@ def select_folder_training():
                     lstMSMSfiles.append(os.path.realpath(os.path.join(root, file)))
 
         appended_data = []
+
+        if len(lstMSMSfiles)==0:
+            return dict({'status': 'error',
+                         'message': 'No msms.txt files were not found in the folder path you specified.'})
+
         for m in lstMSMSfiles:
             msms = pd.read_csv(m,
                                error_bad_lines=False,
@@ -299,6 +336,7 @@ def select_folder_training():
                  "Masses",
                  "Type"]]
 
+
         msmsFiltered = msmsFiltered[msmsFiltered['Score'] >= int(andromeda_score)]
         appended_data.append(msmsFiltered)
         appended_data = pd.concat(appended_data)
@@ -315,13 +353,14 @@ def select_folder_training():
             d["Charge"] = row['Charge']
             d["NumberPeptides"] = row['NumberPeptides']
             data.append(d)
-        return json.dumps(data)
+        return dict({'status':'ok', 'message':'No errors found', 'data':data})
 
 
 @app.route('/predict/<model_name>', methods=['POST','GET'])
 def predict(model_name):
     res =[]
     peptides = request.get_json()
+    print (peptides)
     if os.path.isfile(Path("models",model_name,"model_y.json")):
         #_MSMS_MODEL = {"model_name": "", "model_y": "", "model_b": ""}
         if (_MSMS_MODEL["model_name"] != model_name):
@@ -358,7 +397,7 @@ def predict(model_name):
             with open(Path("models",model_name,"tokenizer.json")) as f:
                 data = json.load(f)
                 loaded_tokenizer = tokenizer_from_json(data)
-                feature_vector = loaded_tokenizer.texts_to_sequences(p["peptide"])
+                feature_vector = loaded_tokenizer.texts_to_sequences([p["peptide"]])
                 feature_vector = pad_sequences(feature_vector, maxlen=50)
                 print("------")
                 rt_pred=_RT_MODEL["keras_model"].predict(feature_vector)

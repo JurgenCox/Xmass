@@ -13,16 +13,18 @@ body {
 }
 h1 {
   color: white;
-  font-size: 30px;
+  font-size: 10px;
 }
 h2 {
   color: white;
   font-size: 20px;
 }
+
 h3 {
   color: white;
-  font-size: 10px;
+  font-size: 30px;
 }
+
 body {font-family: Arial;}
 
 /* Style the tab */

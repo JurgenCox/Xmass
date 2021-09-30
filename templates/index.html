@@ -5,39 +5,49 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/mystyle.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/jquery.dataTables.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/select.dataTables.min.css') }}">
-<style>
-
-
-
-
-</style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap-responsive.css') }}">
 
     <script src="{{ url_for('static', filename='js/jquery.min.js') }}" type="text/javascript"></script>
-    <script src="{{ url_for('static', filename='js/jquery.dataTables.js') }}" type="text/javascript" charset="utf8"  ></script>
-
-
+    <script src="{{ url_for('static', filename='js/jquery.dataTables.js') }}" type="text/javascript" charset="utf8"></script>
+    <script src="{{ url_for('static', filename='js/bootstrap.js') }}" type="text/javascript" charset="utf8"></script>
 </head>
 <body></body>
 <div class="divheader">
-<h1>XMASS</h1>
+<h3>XMASS</h3>
 <h2>Train your own models for MSMS and RT prediction</h2>
 </div>
 <div class="tab">
-  <button class="tablinks" onclick="openTab(event, 'Train')" id="defaultOpen">Training</button>
-  <button class="tablinks" onclick="openTab(event, 'Evaluate')">Evaluation</button>
-  <button class="tablinks" onclick="openTab(event, 'Services')">Test services</button>
+    <button class="tablinks" onclick="openTab(event, 'Train')" id="defaultOpen">Training</button>
+    <button class="tablinks" onclick="openTab(event, 'Evaluate')">Evaluation</button>
+    <button class="tablinks" onclick="openTab(event, 'Services')">Test services</button>
+    <button class="tablinks" onclick="openTab(event, 'Predictions')">Predictions</button>
 </div>
 
 <div id="Train" class="tabcontent">
         <form id ="search_folder"><br>
             <table>
                 <tr>
-                    <td><label for="pathroot">Location msms.txt files:</label></td>
+                    <td><label for="pathroot">Folder path of msms.txt files:</label></td>
                     <td><input type="text" id="pathroot" name="pathroot" style="width: 400px;"><br></td>
                 </tr>
                 <tr>
                     <td><label for="andromedascore">Andromeda score threshold:</label></td>
-                    <td><input type="text" id="andromedascore" name="andromedascore" style="width: 50px;"></td>
+                    <td>
+                        <select name="andromedascore" id="andromedascore">
+                            <option value="50">50</option>
+                            <option value="60">60</option>
+                            <option value="70">70</option>
+                            <option value="80">80</option>
+                            <option value="90">90</option>
+                            <option value="100" selected>100</option>
+                            <option value="110">110</option>
+                            <option value="120">120</option>
+                            <option value="130">130</option>
+                            <option value="140">140</option>
+                            <option value="150">150</option>
+                        </select>
+                    </td>
                 </tr>
                 <tr>
                     <td><button type="submit" class="button_submit">Search files</button></td>
@@ -53,7 +63,7 @@
             <table id="example" class="display" >
               <thead>
                 <tr>
-                <th>id</th><th>Fragmentation</th><th>Charge</th><th># Unique peptides</th>
+                <th>id</th><th>Fragmentation</th><th>Charge</th><th>Number of unique peptides</th>
                 </tr>
               </thead>
             </table>
@@ -77,32 +87,43 @@
 <div id="Evaluate" class="tabcontent">
     <br>
     <form id="form_list_models">
-        <label for="modelsDropdown">Models</label>
-        <select id="modelsDropdown" name="modelsDropdown"></select>
+        <table>
+            <tr>
+                <td><label for="modelsDropdown">Models: </label></td>
+                <td><select id="modelsDropdown" name="modelsDropdown"></select></td>
+            </tr>
+        </table>
     </form>
-    <br>
+
     <a href="#"><img id ="img_rt" name="img_rt" style="width:600px;height:400px;"></a>
     <a href="#"><img id ="img_msms" name="img_msms" style="width:600px;height:400px;"></a>
     <div id="chart_rt_realVSpred"></div>
 </div>
-
 <div id="Services" class="tabcontent">
 <br>
             <form id="form_test_service">
-            <label for="rest_api_name_test">REST API URL:</label>
-            <input type="text" id="rest_api_name_test" name="rest_api_name_test" style="width: 300px;">
-                    <button type="submit" class="button_submit">  Test  </button>
+                <table>
+                    <tr>
+                        <td><label for="rest_api_name_test">REST API URL:</label></td>
+                        <td><input id="rest_api_name_test" name="rest_api_name_test" style="width: 300px;" list="list_api_name_test"><datalist id="list_api_name_test"></datalist></td>
+                        <td><button type="submit" class="button_submit">    Test service   </button></td>
+                    </tr>
+                </table>
+
+
+
+
             <br>
     <textarea id =ta_test_peptides rows = "12" cols = "200" name = "description">
 [
   {
-    "peptide": "AAAAEEAAA"
+    "peptide": "TLEEEEMMDEGK"
   },
   {
-    "peptide": "EEEEEE"
+    "peptide": "VPESSPIGSAIGR"
   },
     {
-    "peptide": "EEEEIII"
+    "peptide": "YYGTIEDTEFK"
   }
 ]
     </textarea><br>
@@ -112,8 +133,43 @@
     </textarea><br>
     <p id="p_elapsed_time"></p>
 </div>
+<div id="Predictions" class="tabcontent">
+    <br>
+    Get predictions from txt file
+    <p>
+	<input  type="file" id="inputfile" name="inputfile" />
+    <div id="div_number_peptides" name="div_number_peptides"></div>
+    <a href="{{ url_for('.download_file') }}">Download template file</a>
+    </p>
+     <form id="form_predict">
+            <table>
+                <tr>
+                    <td><label for="rest_api_name_test">REST API URL:</label></td>
+                    <td><input id="rest_api_name_predict" name="rest_api_name_predict" list="list_api_name_test" style="width: 300px;"></td>
+                    <td><button type="submit" class="button_submit">  Predict  </button></td>
+                </tr>
+            </table>
 
-<script>
+
+
+     </form>
+
+    <div id="loadingDiv_pred">
+        <img src="{{url_for('static', filename='images/ajax-loader.gif')}}">
+    </div>
+</div>
+
+<script type="text/javascript">
+    (function() {
+  var proxied = window.alert;
+  window.alert = function() {
+    modal = $('<div id="myModal" class="modal hide fade" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true"><div class="modal-header"><button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button><div id="myModalLabel">XMASS message</div></div><div class="modal-body"><p>One fine body…</p></div><div class="modal-footer"><button class="button_submit" data-dismiss="modal" aria-hidden="true">Close</button></div></div>');
+    modal.find(".modal-body").text(arguments[0]);
+    modal.modal('show');
+  };
+})();
+
+var list_peptides=[];
 function openTab(evt, cityName) {
   var i, tabcontent, tablinks;
   tabcontent = document.getElementsByClassName("tabcontent");
@@ -131,24 +187,36 @@ function openTab(evt, cityName) {
 document.getElementById("defaultOpen").click();
 </script>
 <script>
-$(document).ready(function() {
-        $.ajax({
+function loadModels()
+{
+ $.ajax({
            type: "GET",
            url: "/load_list_models",
            data: "{}",
            dataType: "json",
            success: function (data) {
-               var s = '<option value="-1">Please Select a Model</option>';
+               var list_api_name_test = document.getElementById('list_api_name_test');
+               var s = '<option value="-1">Please select a model</option>';
                for (var i = 0; i < data.length; i++) {
                    s += '<option value="' + i + '">' + data[i] + '</option>';
+
+                   var option = document.createElement('option');
+                   option.value = "predict/"+data[i];
+                   list_api_name_test.appendChild(option);
+
+
                }
                $("#modelsDropdown").html(s);
+
            }
 
-       });
+});}
+$(document).ready(function() {
+    loadModels();
     $('#loadingDiv_search_files').hide()
     $('#loadingDiv_train').hide()
     $('#trainingDiv').hide()
+    $('#loadingDiv_pred').hide()
 
     $('#tb-ions').DataTable( {
         autoFill: true,
@@ -185,7 +253,7 @@ $(document).ready(function() {
             { "data": "NumberPeptides" }
         ],
         rowCallback: function(row, data, index){
-            console.log(data['NumberPeptides']);
+
   	        if(data['NumberPeptides']< 100){
     	        $(row).find('td:eq(3)').css('color', 'red');
             }
@@ -236,6 +304,7 @@ $(document).ready(function() {
     $(document).ready(function() {
      $('#search_folder').on('submit', function(event) {
        $('#loadingDiv_search_files').show();
+       Table.clear().draw();
        $.ajax({
           data : {
                     local_path : $('#pathroot').val(),
@@ -245,22 +314,37 @@ $(document).ready(function() {
           url : '/select_folder_training',
           dataType: "json",
           success: function(result){
-                $('#loadingDiv_search_files').hide();
-                $('#trainingDiv').show();
-                Table.clear().draw();
-                Table.rows.add(result).draw();
+
+                if (result['status']=='ok'){
+                    $('#loadingDiv_search_files').hide();
+                    $('#trainingDiv').show();
+                    Table.rows.add(result['data']).draw();
+                }else{
+                    alert(result['message']);
+                    $('#loadingDiv_search_files').hide();
+                };
+
           },
           failure: function(errMsg) {
                 console.log(errMsg);
+                $('#loadingDiv_search_files').hide();
          }
       });
       event.preventDefault();
       });
 
      $("#modelsDropdown").change(function() {
-        document.getElementById('img_msms').src = '';
-        document.getElementById('img_rt').src = '';
-                model_name=$(this).find("option:selected").text();
+        document.getElementById('img_msms').src = '#';
+        document.getElementById('img_rt').src = '#';
+        document.getElementById('img_msms').style.visibility = "hidden";
+        document.getElementById('img_rt').style.visibility = "hidden";
+        document.getElementById('img_msms').style.width = "0px";
+        document.getElementById('img_rt').style.width = "0px";
+        model_name=$(this).find("option:selected").text();
+
+        if (parseInt($(this).find('option:selected').val())==-1) {
+            return false;
+        }
         $.ajax({
           data : {
                     model : model_name,
@@ -270,7 +354,13 @@ $(document).ready(function() {
           dataType: "json",
 
           success: function(result){
-                document.getElementById('img_rt').src = 'data:;base64,' + result['image'];
+
+                if (result['status']=='ok'){
+                    document.getElementById('img_rt').src = 'data:;base64,' + result['image'];
+                    document.getElementById('img_rt').style.width = "550px";
+                    document.getElementById('img_rt').style.visibility = "visible";
+
+                }
           },
           failure: function(errMsg) {
                 console.log(errMsg);
@@ -286,7 +376,12 @@ $(document).ready(function() {
           dataType: "json",
 
           success: function(result){
-                document.getElementById('img_msms').src = 'data:;base64,' + result['image'];
+
+                if (result['status']=='ok'){
+                     document.getElementById('img_msms').src = 'data:;base64,' + result['image'];
+                     document.getElementById('img_msms').style.width = "550px";
+                     document.getElementById('img_msms').style.visibility = "visible";
+                }
           },
           failure: function(errMsg) {
                 console.log(errMsg);
@@ -354,10 +449,9 @@ $(document).ready(function() {
 $('#form_test_service').on('submit', function(event) {
        var model_name = $('#rest_api_name_test').val();
        var peptides = JSON.parse($('#ta_test_peptides').val());
-       const myArr = JSON.parse($('#ta_test_peptides').val());
-       console.log(myArr);
+
        $.ajax({
-          data: JSON.stringify(myArr),
+          data: JSON.stringify(peptides),
           type : 'POST',
           dataType: 'json',
           url : model_name,
@@ -378,11 +472,97 @@ $('#form_test_service').on('submit', function(event) {
 
 });
 
+function download(filename, text) {
+  var element = document.createElement('a');
+  element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
+  element.setAttribute('download', filename);
+  element.style.display = 'none';
+  document.body.appendChild(element);
+  element.click();
+  document.body.removeChild(element);
+}
+
+
+$('#form_predict').on('submit', function(event) {
+       $('#loadingDiv_pred').show();
+       var model_name = $('#rest_api_name_predict').val();
+       const myArr = list_peptides;
+
+       $.ajax({
+          data: JSON.stringify(myArr),
+          type : 'POST',
+          dataType: 'json',
+          url : model_name,
+          contentType: "application/json",
+          start_time: new Date().getTime(),
+          success: function(result){
+                text="";
+                // Creating headers
+                for (var key of Object.keys(result[0])) {
+                    text= text + key + "\t"
+                }
+                text=text+"\n";
+                // Filling with the predictions
+                for (let row = 0; row < result.length; row++){
+                    for (var key of Object.keys(result[row])) {
+                        text= text + result[row][key] + "\t"
+                    }
+                    text=text+"\n";
+                }
+                download("xmass_predictions.txt",text);
+          },
+          failure: function(errMsg) {
+                alert(errMsg);
+          },
+          complete: function(data) {
+             $('#loadingDiv_pred').hide();
+          }
+      });
+      event.preventDefault();
+});
 
 
 </script>
+
+ <script>
+
+
+        document.getElementById('inputfile').addEventListener('change', function() {
+            list_peptides=[];
+            document.getElementById('div_number_peptides').innerHTML = "";
+            var file = this.files[0];
+            var reader = new FileReader();
+            reader.onload = function(progressEvent){
+                var lines = this.result.split('\n');
+                if (lines.length>=10001)
+                    { alert ("Only 10000 predictions are allowed"); return; }
+                for(var line = 0; line < lines.length; line++){
+                    if (line!=0){
+                        if (String(lines[line]).trim().match(/^[A-Z]*$/)) {
+
+                            var dict = {peptide: String(lines[line]).trim()};
+                            list_peptides.push(dict)
+                        } else {
+                            alert("Invalid peptide:"+lines[line]);
+                            return false;
+                        }
+                    }
+                }
+                document.getElementById('div_number_peptides').innerHTML = "Number of peptides contained in file: "+ list_peptides.length;
+
+            };
+            reader.readAsText(file);
+        })
+</script>
 <script>
 function train() {
+
+
+    if (!Table.rows( '.selected' ).any())
+    {
+        alert("Please select a row from the table to create a specific model according to fragmentation and charge.")
+        return;
+    }
 
     var dir = document.getElementById("pathroot").value;
     var api_name = document.getElementById("rest_api_name").value;
@@ -390,16 +570,31 @@ function train() {
     var oData = Table.rows('.selected').data();
     var frag= oData[0]['Fragmentation'];
     var charge =oData[0]['Charge'];
+    var num_peptides =oData[0]['NumberPeptides'];
+
+
     var msms_flag = 0;
     var rt_flag = 0;
 
     var selected_models = [];
+
+    if (num_peptides<100 )
+    {
+        alert("You need at least 100 unique peptides to create a model, if you reduce the andromeda threshold you might get more peptides.")
+        return;
+    }
 
     if (document.getElementById('cb_msms').checked){
         msms_flag=1
     }
      if (document.getElementById('cb_rt').checked){
         rt_flag=1
+    }
+
+    if (msms_flag == 0 && rt_flag == 0 )
+    {
+        alert("Please select at least one model no train, you can predict msms spectra and/or retention time")
+        return;
     }
 
     $('#loadingDiv_train').show();
@@ -417,6 +612,7 @@ function train() {
           url : '/train_unique',
           dataType: "json",
           success: function(result){
+                alert(result['message']);
                 $('#loadingDiv_train').hide();
 
                 loadModels();
@@ -427,30 +623,13 @@ function train() {
          }
       });
 }
-function loadModels()
-{
- $.ajax({
-           type: "GET",
-           url: "/load_list_models",
-           data: "{}",
-           dataType: "json",
-           success: function (data) {
 
-               var s = '<option value="-1">Please Select a Model</option>';
-               for (var i = 0; i < data.length; i++) {
-                   s += '<option value="' + i + '">' + data[i] + '</option>';
-               }
-               $("#modelsDropdown").html(s);
-           }
-
-});}
 </script>
 <script>
 
 
 </script>
 <div id="id"></div>
-<h3>© 2020-2021 Max-Planck-Institut für Biochemie. All rights reserved.</h3>
-<h3>Contact: salinas@biochem.mpg.de</h3>
+<h1>© 2020-2021 Max-Planck-Institut für Biochemie. All rights reserved.</h1>
 </body>
 </html>

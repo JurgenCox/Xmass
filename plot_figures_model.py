@@ -31,7 +31,8 @@ def plot_retention_time(path):
     fig.suptitle("RT: Training, validation and testing Results", fontsize=16)
     ax1 = fig.add_subplot(121)
     ax2 = fig.add_subplot(122)
-
+    print("que pasa??")
+    print(train)
     # Figure 1
     ax1.plot(train['train_loss'].astype(float))
     ax1.plot(train['val_loss'].astype(float))
@@ -45,8 +46,8 @@ def plot_retention_time(path):
     y = test['predicted_value'].tolist()
 
     pc = round(pearsonr(x, y)[0], 5)
-    xy = np.vstack([x, y])
-    z = gaussian_kde(xy)(xy)
+    #xy = np.vstack([x, y])
+    #z = gaussian_kde(xy)(xy)
     ax2.set_title('Scatter plot real vs predictions (test dataset)')
     #ax2.plot([0.4, 1], [0.4, 1])
     ax2.scatter(x, y, label='Scatter Plot')
