@@ -1,4 +1,4 @@
-name: xmass_py3
+name: xmass_py36
 channels:
   - defaults
 dependencies:
