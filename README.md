@@ -2,7 +2,7 @@
 
 Installation Ubuntu
 
-Before installing Xmass be sure GIT Anaconda (or miniconda) are installed.
+Before installing Xmass be sure GIT, Anaconda (or miniconda) are installed.
 
 Installation:
 1)	Get Xmass repository : git clone https://github.com/JurgenCox/Xmass
