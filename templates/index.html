@@ -90,7 +90,7 @@
         <table>
             <tr>
                 <td><label for="modelsDropdown">Models: </label></td>
-                <td><select id="modelsDropdown" name="modelsDropdown"></select></td>
+                <td><select id="modelsDropdown" name="modelsDropdown" style="width: 400px;"  ></select></td>
             </tr>
         </table>
     </form>
@@ -534,8 +534,8 @@ $('#form_predict').on('submit', function(event) {
             var reader = new FileReader();
             reader.onload = function(progressEvent){
                 var lines = this.result.split('\n');
-                if (lines.length>=10001)
-                    { alert ("Only 10000 predictions are allowed"); return; }
+                if (lines.length>=100000001)
+                    { alert ("Only 100000000 predictions are allowed"); return; }
                 for(var line = 0; line < lines.length; line++){
                     if (line!=0){
                         if (String(lines[line]).trim().match(/^[A-Z]*$/)) {
@@ -593,7 +593,7 @@ function train() {
 
     if (msms_flag == 0 && rt_flag == 0 )
     {
-        alert("Please select at least one model no train, you can predict msms spectra and/or retention time")
+        alert("Please select at least one model to train, you can predict msms spectra and/or retention time")
         return;
     }
 

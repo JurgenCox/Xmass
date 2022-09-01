@@ -13,6 +13,7 @@ from scipy.stats.stats import pearsonr
 from scipy.stats import gaussian_kde
 import matplotlib.patches as mpatches
 from pathlib import Path
+from sklearn.metrics import r2_score
 
 def plot_retention_time(path):
     plt.clf()
@@ -20,9 +21,9 @@ def plot_retention_time(path):
     train_file = Path(path,"train_information_rt.tsv")
     figure = Path(path,"graph_rt.png")
 
-    test = pd.read_csv(test_file, sep='\t', lineterminator='\r', skip_blank_lines=True).dropna()
+    test = pd.read_csv(test_file, sep='\t', skip_blank_lines=True).dropna()
     test = test.replace(r'\n', '', regex=True)
-    train = pd.read_csv(train_file, sep='\t', lineterminator='\r', skip_blank_lines=True).dropna()
+    train = pd.read_csv(train_file, sep='\t',  skip_blank_lines=True).dropna()
     train = train.replace(r'\n', '', regex=True)
 
     test["real_value"] = pd.to_numeric(test["real_value"])
@@ -46,16 +47,14 @@ def plot_retention_time(path):
     y = test['predicted_value'].tolist()
 
     pc = round(pearsonr(x, y)[0], 5)
-    #xy = np.vstack([x, y])
-    #z = gaussian_kde(xy)(xy)
+    r2= round(r2_score(x,y),5)
     ax2.set_title('Scatter plot real vs predictions (test dataset)')
-    #ax2.plot([0.4, 1], [0.4, 1])
     ax2.scatter(x, y, label='Scatter Plot')
-
     ax2.set_xlabel("Real Values")
     ax2.set_ylabel("Predicted Values")
-    empty_patch = mpatches.Patch(color="white", label="Person correlation: " + str(pc))
-    ax2.legend(handles=[empty_patch], loc='lower right')
+    patch_pc = mpatches.Patch(color="white", label="PC: "+str(pc))
+    patch_r2 = mpatches.Patch(color="white", label="R2: "+str(r2))
+    ax2.legend(handles=[patch_pc,patch_r2])
     ax2.grid(which='major', axis='both', linestyle='--')
     plt.savefig(figure, dpi=300)
 

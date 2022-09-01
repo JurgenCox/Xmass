@@ -18,6 +18,7 @@ import plot_figures_model as myplt
 import base64
 from scipy.stats.stats import pearsonr
 from pathlib import Path
+from multiprocessing.pool import ThreadPool as Pool
 from keras.backend import manual_variable_initialization
 #manual_variable_initialization(True)
 
@@ -34,6 +35,11 @@ def expSVRPrediction(lstpred):
     exp= (np.power(2, a)-1)/10000
     return  exp
 
+def expSVRPrediction_bn(lstpred):
+    a= np.array(lstpred).clip(min=0)
+    exp= (np.power(2, a)-1)
+    return  exp
+
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -47,7 +53,7 @@ def download_file():
 def load_list_models():
     path_models= Path("models")
     lst_models = os.listdir(path_models)
-    return json.dumps(lst_models)
+    return json.dumps(sorted(lst_models))
 
 @app.route('/get_image_rt', methods=['POST','GET'])
 def get_image_rt():
@@ -123,6 +129,8 @@ def train_unique():
             msmsFiltered = msmsFiltered[msmsFiltered['Score'] >= int(andromeda_score)]
             msmsFiltered = msmsFiltered[msmsFiltered['Charge'] >= int(charge)]
             msmsFiltered = msmsFiltered[msmsFiltered['Fragmentation'] == fragmentation]
+            #msmsFiltered = msmsFiltered[msmsFiltered['Retention time'] <= 85]
+            msmsFiltered = msmsFiltered[msmsFiltered['Modifications'] == "Unmodified"]
             appended_data.append(msmsFiltered)
         df_peptides_train = pd.concat(appended_data)
         # Filtering unique sequences by max Andromeda Score
@@ -132,6 +140,7 @@ def train_unique():
 
         if flag_msms == "1":
             # %%
+            count=0
             start_time = time.time()
             feature_matrix_x = []
             target_y = []
@@ -157,7 +166,7 @@ def train_unique():
             ###
 
             model_y = XGBRegressor(
-                max_depth=8, learning_rate=0.1, n_estimators=50,
+                max_depth=12, learning_rate=0.1, n_estimators=1400,
                 objective="reg:linear",
                 nthread=8,
                 gamma=0,
@@ -177,7 +186,7 @@ def train_unique():
                 print(Path(final_directory,"model_y.json"))
 
             model_b = XGBRegressor(
-                max_depth=8, learning_rate=0.1, n_estimators=50,
+                max_depth=18, learning_rate=0.1, n_estimators=1300,
                 objective="reg:linear",
                 nthread=8,
                 gamma=0,
@@ -261,7 +270,7 @@ def train_unique():
             retention_times= df_maxScoreRT["Retention time"].to_list()
             # Initializing class, you can change different parameters like number of epochs, batch size etc, before training
             RTP = rtp.RetentionTimePrediction(peptides, retention_times,path_api)
-            RTP.epochs = 20
+            RTP.epochs = 40
             # RTP.epochs <- Example changing number of epochs (the default is 40 ). You have to do it before training
             RTP.train()
             RTP.model.save(Path(final_directory,"model_rt.h5"))
@@ -337,8 +346,10 @@ def select_folder_training():
                  "Type"]]
 
 
-        msmsFiltered = msmsFiltered[msmsFiltered['Score'] >= int(andromeda_score)]
-        appended_data.append(msmsFiltered)
+            msmsFiltered = msmsFiltered[msmsFiltered['Score'] >= int(andromeda_score)]
+            msmsFiltered = msmsFiltered[msmsFiltered['Modifications'] == "Unmodified"]
+            appended_data.append(msmsFiltered)
+        
         appended_data = pd.concat(appended_data)
         appended_data_d = appended_data[["Fragmentation", "Charge","Sequence"]]
         appended_data_d= appended_data_d.groupby(["Fragmentation", "Charge"], as_index=False)['Sequence'].nunique().rename(columns={'Sequence':'NumberPeptides'})
@@ -356,10 +367,41 @@ def select_folder_training():
         return dict({'status':'ok', 'message':'No errors found', 'data':data})
 
 
+def single_prediction(p, model_name, global_list,total):
+        prediction = ("", "")
+        d = dict()
+        d["Peptide"] = p["peptide"]
+        print(round(len(global_list)*100/total,2),"%")
+        if os.path.isfile(Path("models", model_name, "model_y.json")):
+            prediction = get_prediction(p["peptide"], _MSMS_MODEL["model_y"], _MSMS_MODEL["model_b"])
+            d["Intensities"] = prediction[0]
+            d["Matches"] = prediction[1]
+        if os.path.isfile(Path("models", model_name, "model_rt.h5")):
+            max_val_rt = 1
+            with open(Path("models", model_name, "max_rt.json")) as json_file:
+                data = json.load(json_file)
+                max_val_rt = float(data["max_rt"])
+            with open(Path("models", model_name, "tokenizer.json")) as f:
+                data = json.load(f)
+                loaded_tokenizer = tokenizer_from_json(data)
+                feature_vector = loaded_tokenizer.texts_to_sequences([p["peptide"]])
+                feature_vector = pad_sequences(feature_vector, maxlen=50)
+                rt_pred = _RT_MODEL["keras_model"].predict(feature_vector)
+            d["RT"] = str(rt_pred[0][0] * float(max_val_rt))
+            global_list.append(d)
+        else:
+            d = dict()
+            d["Peptide"] = p["peptide"]
+            d["Intensities"] = prediction[0]
+            d["Matches"] = prediction[1]
+            global_list.append(d)
+
 @app.route('/predict/<model_name>', methods=['POST','GET'])
 def predict(model_name):
+    start_time = time.time()
     res =[]
     peptides = request.get_json()
+    count=0
     print (peptides)
     if os.path.isfile(Path("models",model_name,"model_y.json")):
         #_MSMS_MODEL = {"model_name": "", "model_y": "", "model_b": ""}
@@ -380,38 +422,20 @@ def predict(model_name):
             _RT_MODEL["model_name"]= model_name
 
     ##########################
-    for p in peptides:
-        prediction=("","")
-        d = dict()
-        d["Peptide"] = p["peptide"]
-        if os.path.isfile(Path("models", model_name,"model_y.json")):
-            prediction = get_prediction(p["peptide"], _MSMS_MODEL["model_y"] , _MSMS_MODEL["model_b"] )
-            d["Intensities"] = prediction[0]
-            d["Matches"] = prediction[1]
-        if os.path.isfile(Path("models", model_name, "model_rt.h5")):
-            max_val_rt= 1
-            with open(Path("models", model_name, "max_rt.json")) as json_file:
-                data = json.load(json_file)
-                max_val_rt=float(data["max_rt"])
-                print("max value",str(max_val_rt))
-            with open(Path("models",model_name,"tokenizer.json")) as f:
-                data = json.load(f)
-                loaded_tokenizer = tokenizer_from_json(data)
-                feature_vector = loaded_tokenizer.texts_to_sequences([p["peptide"]])
-                feature_vector = pad_sequences(feature_vector, maxlen=50)
-                print("------")
-                rt_pred=_RT_MODEL["keras_model"].predict(feature_vector)
-            print("Prediction",str(rt_pred[0][0]))
-            d["RT"]=str(rt_pred[0][0]*float(max_val_rt))
-            res.append(d)
-        else:
-            d = dict()
-            d["Peptide"] = p["peptide"]
-            d["Intensities"] = prediction[0]
-            d["Matches"] = prediction[1]
-            res.append(d)
-    print (res)
-    return json.dumps(res)
+    ##########################
+    pool = Pool(8)
+    global_list=[]
+    total_pep=len(peptides)
+    for item in peptides:
+        pool.apply_async(single_prediction, (item,model_name,global_list,total_pep))
+    pool.close()
+    pool.join()
+    end_time = time.time()
+    print("Prediction took this long to run: {}".format(end_time - start_time))
+    df_temp = pd.DataFrame(global_list)
+    df_temp.to_csv(r"temp_yeast_hcd_2.txt", sep='\t' , index=False)
+    print("filesaved!!!!!!!!!!!!!!")
+    return json.dumps(global_list)
 
 
 def get_prediction(sequence, xgb_model_loaded_y, xgb_model_loaded_b):
@@ -424,6 +448,9 @@ def get_prediction(sequence, xgb_model_loaded_y, xgb_model_loaded_b):
             y_ions.append(xgb_model_loaded_y.predict(np.array(d['featureMatrix'][i]).reshape(1, -1))[0])
             b_ions.append(xgb_model_loaded_b.predict(np.array(d['featureMatrix'][i]).reshape(1, -1))[0])
 
+        y_ions=expSVRPrediction_bn(y_ions).tolist()
+        b_ions=expSVRPrediction_bn(b_ions).tolist()
+        
         ystr=["y"]*(len(sequence)-1)
         ynum=list(range((len(sequence)-1), 0, -1))
         ions_aux_y = [m + str(n) for m, n in zip(ystr, ynum)]
@@ -440,5 +467,5 @@ def get_prediction(sequence, xgb_model_loaded_y, xgb_model_loaded_b):
 
 if __name__ == '__main__':
     # run app in debug mode on port 5000
-    app.run(debug=True, port=5000)
-    #app.run(host="0.0.0.0")
+   # app.run(debug=True, port=5000)
+    app.run(host="0.0.0.0")
