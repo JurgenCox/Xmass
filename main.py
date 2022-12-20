@@ -1,42 +1,73 @@
+'''
+@Autor: Favio Salinas email: faviobol@hotmail.com
+XMASS is a tool to train models for peptide intensities predictions and retention times
+'''
 from flask import Flask, request, send_file
 from flask import render_template
 from sklearn.model_selection import train_test_split
+from xgboost import XGBRegressor
+from keras.preprocessing.text import tokenizer_from_json
+from tensorflow import keras
+from keras.utils import pad_sequences
+from scipy.stats.stats import pearsonr
+from pathlib import Path
+from xmass_plot import XMassPlot
 import windowfeatures as wf
 import numpy as np
 import xgboost as xgb
 import json
 import os
 import time
-from xgboost import XGBRegressor
 import pandas as pd
 import retention_time_prediction as rtp
 import os.path
-from keras.preprocessing.text import tokenizer_from_json
-from keras.preprocessing.sequence import pad_sequences
-from tensorflow import keras
-import plot_figures_model as myplt
 import base64
-from scipy.stats.stats import pearsonr
-from pathlib import Path
-from multiprocessing.pool import ThreadPool as Pool
-from keras.backend import manual_variable_initialization
-#manual_variable_initialization(True)
+from datetime import date
+
+# Global Variables == models
+
+DICT_MODELS_ACTION=dict()
+
 
 # create the Flask app
 app = Flask(__name__)
 
-# Global Variables == models
+def load_models_in_memory():
+    '''
+    To speed up the predictions for the REST API. All the models are loaded at the beginning
+    '''
+    print("Loading models in memory......")
+    lst_models = os.listdir("models")
+    for m in lst_models:
+        DICT_MODELS_ACTION[m]= {'MSMS': True, 'RT':False}
+        if os.path.isfile(Path("models", m, "model_y.json")):
+            xgb_model_loaded_y = xgb.XGBRegressor()
+            xgb_model_loaded_b = xgb.XGBRegressor()
+            xgb_model_loaded_y.load_model(Path("models",m,"model_y.json"))
+            xgb_model_loaded_b.load_model(Path("models",m,"model_b.json"))
+            DICT_MODELS_ACTION[m]['MSMS']= True
+            DICT_MODELS_ACTION[m]['model_y']= xgb_model_loaded_y
+            DICT_MODELS_ACTION[m]['model_b']= xgb_model_loaded_b
+        if os.path.isfile(Path("models", m, "model_rt.h5")):
+            DICT_MODELS_ACTION[m]['RT']= True
+            DICT_MODELS_ACTION[m]['model_RT']= keras.models.load_model(Path("models", m, "model_rt.h5"),compile=False)
 
-_RT_MODEL={"model_name":"", "keras_model":""}
-_MSMS_MODEL={"model_name":"", "model_y":"", "model_b":""}
+load_models_in_memory()
 
-def expSVRPrediction(lstpred):
-    a= np.array(lstpred).clip(min=0)
-    exp= (np.power(2, a)-1)/10000
+def exponential_prediction(list_predictions: list):
+    '''
+    For the training dataset a log function is applied, this is the reverse funcion (More information on XMass paper)
+    Predictions that are negative will be changed to cero.
+    '''
+    a= np.array(list_predictions).clip(min=0)
+    exp= (np.power(2, a)-1)#/10000
     return  exp
-
-def expSVRPrediction_bn(lstpred):
-    a= np.array(lstpred).clip(min=0)
+def exponential_prediction_array(array):
+    '''
+    For the training dataset a log function is applied, this is the reverse funcion (More information on XMass paper)
+    Predictions that are negative will be changed to cero.
+    '''
+    a= array.clip(min=0)
     exp= (np.power(2, a)-1)
     return  exp
 
@@ -46,11 +77,17 @@ def index():
 
 @app.route('/download')
 def download_file():
+    '''
+    Downloads a template file that can be used as example of how to submit data to get predictions from text files
+    '''
     filename = Path("download","xmass_template.txt")
     return send_file(filename, as_attachment=True)
 
 @app.route('/load_list_models', methods=['POST','GET'])
 def load_list_models():
+    '''
+    Returns a list of all the models that are contained in the folder models. If the folder is empty, it returns an empty list
+    '''
     path_models= Path("models")
     lst_models = os.listdir(path_models)
     return json.dumps(sorted(lst_models))
@@ -163,8 +200,6 @@ def train_unique():
                     target_b.append(np.log2(1 + (1000 * d['target_B'][i])))
             print("--- Creating feature Matrix %s seconds ---" % (time.time() - start_time))
 
-            ###
-
             model_y = XGBRegressor(
                 max_depth=12, learning_rate=0.1, n_estimators=1400,
                 objective="reg:linear",
@@ -215,7 +250,7 @@ def train_unique():
                     b_real.append(d['target_B'][i])
                     y_pred.append(model_y.predict(np.array(d['featureMatrix'][i]).reshape(1, -1))[0])
                     b_pred.append(model_b.predict(np.array(d['featureMatrix'][i]).reshape(1, -1))[0])
-                pc_validation.append(pearsonr(y_real + b_real, expSVRPrediction(y_pred + b_pred))[0])
+                pc_validation.append(pearsonr(y_real + b_real, exponential_prediction(y_pred + b_pred))[0])
             print(len(pc_validation))
 
             pc_test = []
@@ -233,7 +268,7 @@ def train_unique():
                     b_real.append(d['target_B'][i])
                     y_pred.append(model_y.predict(np.array(d['featureMatrix'][i]).reshape(1, -1))[0])
                     b_pred.append(model_b.predict(np.array(d['featureMatrix'][i]).reshape(1, -1))[0])
-                pc_test.append(pearsonr(y_real + b_real, expSVRPrediction(y_pred + b_pred))[0])
+                pc_test.append(pearsonr(y_real + b_real, exponential_prediction(y_pred + b_pred))[0])
             print(len(pc_validation))
 
             results = pd.DataFrame(
@@ -244,19 +279,12 @@ def train_unique():
                 })
 
             results.to_csv(Path(final_directory,"test_information_msms.tsv"), sep='\t')
-            myplt.plot_msms(final_directory)
+            xmass_plot= XMassPlot(folder_model_path=final_directory, size_image=(10,5))
+            xmass_plot.plot_msms()
             print("Training Images - DONE")
 
         if flag_rt == "1":
             print("?"+final_directory)
-
-            # Training retention Time
-            # Filtering unique sequences by max Andromeda Score
-            print ("Antes:")
-            print (df_peptides_train)
-            print("Columns:")
-            print(df_peptides_train.keys())
-            print ("Despues")
 
             idx1 = df_peptides_train.groupby(['Sequence'])['Score'].transform(max) == df_peptides_train['Score']
             print (len(idx1))
@@ -293,9 +321,10 @@ def train_unique():
             for idx, val in enumerate(x):
                 file_testing.write(str(x[idx]*max_rt) + "\t" + str(y[idx]*max_rt) + "\n")
             file_testing.close()
+            xmass_plot= XMassPlot(folder_model_path=final_directory, size_image=(10,5))
+            xmass_plot.plot_retention_time()
 
-            print("?"+final_directory)
-            myplt.plot_retention_time(final_directory)
+        load_models_in_memory()
         return json.dumps({'status': 'ok', 'message': 'The model was succesfully created!'})
 
 
@@ -366,106 +395,98 @@ def select_folder_training():
             data.append(d)
         return dict({'status':'ok', 'message':'No errors found', 'data':data})
 
-
-def single_prediction(p, model_name, global_list,total):
-        prediction = ("", "")
-        d = dict()
-        d["Peptide"] = p["peptide"]
-        print(round(len(global_list)*100/total,2),"%")
-        if os.path.isfile(Path("models", model_name, "model_y.json")):
-            prediction = get_prediction(p["peptide"], _MSMS_MODEL["model_y"], _MSMS_MODEL["model_b"])
-            d["Intensities"] = prediction[0]
-            d["Matches"] = prediction[1]
-        if os.path.isfile(Path("models", model_name, "model_rt.h5")):
-            max_val_rt = 1
-            with open(Path("models", model_name, "max_rt.json")) as json_file:
-                data = json.load(json_file)
-                max_val_rt = float(data["max_rt"])
-            with open(Path("models", model_name, "tokenizer.json")) as f:
-                data = json.load(f)
-                loaded_tokenizer = tokenizer_from_json(data)
-                feature_vector = loaded_tokenizer.texts_to_sequences([p["peptide"]])
-                feature_vector = pad_sequences(feature_vector, maxlen=50)
-                rt_pred = _RT_MODEL["keras_model"].predict(feature_vector)
-            d["RT"] = str(rt_pred[0][0] * float(max_val_rt))
-            global_list.append(d)
-        else:
-            d = dict()
-            d["Peptide"] = p["peptide"]
-            d["Intensities"] = prediction[0]
-            d["Matches"] = prediction[1]
-            global_list.append(d)
-
 @app.route('/predict/<model_name>', methods=['POST','GET'])
 def predict(model_name):
     start_time = time.time()
-    res =[]
     peptides = request.get_json()
-    count=0
-    print (peptides)
-    if os.path.isfile(Path("models",model_name,"model_y.json")):
-        #_MSMS_MODEL = {"model_name": "", "model_y": "", "model_b": ""}
-        if (_MSMS_MODEL["model_name"] != model_name):
-            xgb_model_loaded_y = xgb.XGBRegressor()
-            xgb_model_loaded_y.load_model(Path("models",model_name,"model_y.json"))
-            _MSMS_MODEL["model_y"] = xgb_model_loaded_y
-
-            xgb_model_loaded_b = xgb.XGBRegressor()
-            xgb_model_loaded_b.load_model(Path("models",model_name,"model_b.json"))
-            _MSMS_MODEL["model_b"] = xgb_model_loaded_b
-
-    if os.path.isfile(Path("models", model_name, "model_rt.h5")):
-        #K.clear_session()
-        #_RT_MODEL = {"model_name": "", "keras_model": ""}
-        if (_RT_MODEL["model_name"]!=model_name):
-            _RT_MODEL["keras_model"] = keras.models.load_model(Path("models", model_name, "model_rt.h5"),compile=False)
-            _RT_MODEL["model_name"]= model_name
-
-    ##########################
-    ##########################
-    pool = Pool(8)
+    list_matches=[]
+    list_intensities=[]
+    list_rt_times=[]
     global_list=[]
-    total_pep=len(peptides)
-    for item in peptides:
-        pool.apply_async(single_prediction, (item,model_name,global_list,total_pep))
-    pool.close()
-    pool.join()
+    
+    msms_predictions= DICT_MODELS_ACTION[model_name]['MSMS']
+    rt_predicitions= DICT_MODELS_ACTION[model_name]['RT']
+
+    if msms_predictions:
+        array_features=np.empty((0,549), int)
+        for seq in peptides:
+            myTrainingMatrix = wf.createWindowData(seq['peptide'], "y1", "1")
+            myTrainingMatrix.GenerateMatrix(24)
+            d = myTrainingMatrix.GenerateDataset(removeZeros=False)
+            array_features=np.append(array_features, d['featureMatrix'], axis=0)   
+        
+        y_ions = (DICT_MODELS_ACTION[model_name]['model_y'].predict(np.array(array_features)))
+        b_ions = (DICT_MODELS_ACTION[model_name]['model_b'].predict(np.array(array_features)))
+        
+        y_ions=exponential_prediction_array(y_ions).round(decimals=4, out=None)
+        b_ions=exponential_prediction_array(b_ions).round(decimals=4, out=None)
+
+        start=0
+        for seq in peptides:
+            end= start + len(seq['peptide'])-1
+
+            ystr=["y"]*(len(seq['peptide'])-1)
+            ynum=list(range((len(seq['peptide'])-1), 0, -1))
+            ions_aux_y = [m + str(n) for m, n in zip(ystr, ynum)]
+
+            bstr = ["b"] * (len(seq['peptide']) - 1)
+            bnum = list(range(1, len(seq['peptide'])))
+            ions_aux_b = [m + str(n) for m, n in zip(bstr, bnum)]
+
+            ions=";".join(map(str, ions_aux_y+ions_aux_b))
+            list_matches.append(ions)
+
+            intensities=";".join(map(str, np.concatenate((y_ions[start:end],b_ions[start:end]), axis=None)))
+            list_intensities.append(intensities)
+
+            start=end
+
+    lst_peptides=[seq['peptide'] for seq in peptides]
+    if rt_predicitions:
+        max_val_rt = 1
+        with open(Path("models", model_name, "max_rt.json")) as json_file:
+            data = json.load(json_file)
+            max_val_rt = float(data["max_rt"])
+        with open(Path("models", model_name, "tokenizer.json")) as f:
+            data = json.load(f)
+            loaded_tokenizer = tokenizer_from_json(data)
+            feature_vector = loaded_tokenizer.texts_to_sequences(lst_peptides)
+            feature_vector = pad_sequences(feature_vector, maxlen=50)
+            rt_pred = DICT_MODELS_ACTION[model_name]['model_RT'].predict(feature_vector) * float(max_val_rt)
+            list_rt_times=rt_pred
+
+    if msms_predictions==True and rt_predicitions==True:
+        for idx, seq in enumerate(peptides):
+            d = dict()
+            d["Peptide"] = seq['peptide']
+            d["Intensities"] = list_intensities[idx]
+            d["Matches"] = list_matches[idx]
+            d["RT"] = str(list_rt_times[idx][0].round(decimals=4, out=None))
+            global_list.append(d)
+
+    if msms_predictions==True and rt_predicitions==False:
+        for idx, seq in enumerate(peptides):
+            d = dict()
+            d["Peptide"] = seq
+            d["Intensities"] = list_intensities[idx]
+            d["Matches"] = list_matches[idx]
+            global_list.append(d)
+        
+    if msms_predictions==False and rt_predicitions==True:
+        for idx, seq in enumerate(peptides):
+            d = dict()
+            d["RT"] = str(list_rt_times[idx][0].round(decimals=4, out=None))
+            global_list.append(d)
+
     end_time = time.time()
     print("Prediction took this long to run: {}".format(end_time - start_time))
     df_temp = pd.DataFrame(global_list)
-    df_temp.to_csv(r"temp_yeast_hcd_2.txt", sep='\t' , index=False)
-    print("filesaved!!!!!!!!!!!!!!")
+
+    today = date.today()
+    df_temp.to_csv(Path("temp_predictions",model_name+today.strftime("%d_%m_%Y")+".txt"), sep='\t' , index=False)
+    print("Temporal file saved as: ", Path("temp_predictions",model_name+today.strftime("%d_%m_%Y")+".txt"))
     return json.dumps(global_list)
 
-
-def get_prediction(sequence, xgb_model_loaded_y, xgb_model_loaded_b):
-        myTrainingMatrix = wf.createWindowData(sequence, "y1", "1")
-        myTrainingMatrix.GenerateMatrix(24)
-        d = myTrainingMatrix.GenerateDataset(removeZeros=False)
-        y_ions = []
-        b_ions = []
-        for i in range(0, len(d['target_Y'])):
-            y_ions.append(xgb_model_loaded_y.predict(np.array(d['featureMatrix'][i]).reshape(1, -1))[0])
-            b_ions.append(xgb_model_loaded_b.predict(np.array(d['featureMatrix'][i]).reshape(1, -1))[0])
-
-        y_ions=expSVRPrediction_bn(y_ions).tolist()
-        b_ions=expSVRPrediction_bn(b_ions).tolist()
-        
-        ystr=["y"]*(len(sequence)-1)
-        ynum=list(range((len(sequence)-1), 0, -1))
-        ions_aux_y = [m + str(n) for m, n in zip(ystr, ynum)]
-
-
-        bstr = ["b"] * (len(sequence) - 1)
-        bnum = list(range(1, len(sequence)))
-        ions_aux_b = [m + str(n) for m, n in zip(bstr, bnum)]
-
-
-        ions=";".join(map(str, ions_aux_y+ions_aux_b))
-
-        return ";".join(map(str, y_ions+b_ions)),ions
-
 if __name__ == '__main__':
-    # run app in debug mode on port 5000
-   # app.run(debug=True, port=5000)
+    #app.run(debug=True, port=5000) #-> Use this in case you want to debug
     app.run(host="0.0.0.0")

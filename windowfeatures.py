@@ -19,8 +19,7 @@ class createWindowData(object):
         self._daa = dict()
         for index, arrayAA in enumerate(MAA):
             self._daa[aa[index]] = arrayAA
-            # print  self._daa
-
+ 
         self.yIons = [0] * len(sequence)
         self.bIons = [0] * len(sequence)
         lstions = ions.split(";")
@@ -31,6 +30,7 @@ class createWindowData(object):
 
         self._yIons = [0] * len(sequence)
         self._bIons = [0] * len(sequence)
+
 
         for index, ion in enumerate(lstions):
             # print ion , lstintensities[index]

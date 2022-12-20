@@ -1,7 +1,3 @@
-###################################
-### Autor: Favio Salinas        ###
-### salinas@biochem.mpg.de      ###
-###################################
 import pandas as pd
 import numpy as np
 import io
@@ -9,7 +5,7 @@ import json
 from sklearn.model_selection import train_test_split
 from keras.preprocessing.text import Tokenizer
 from keras.preprocessing.text import tokenizer_from_json
-from keras.preprocessing.sequence import pad_sequences
+from keras.utils import pad_sequences
 from tensorflow import keras
 from pathlib import Path
 global TrainingFile
@@ -103,10 +99,6 @@ class RetentionTimePrediction:
                                                                                           self.Y_test_aux,
                                                                                           test_size=0.50,
                                                                                           random_state=self.random_state)
-        print("What??")
-        print(X_test_seq)
-        print(Y_test_seq)
-        print("What??........")
 
     def train(self):
         self.model = self.get_retentiontime_model()
