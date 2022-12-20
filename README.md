@@ -9,6 +9,6 @@ Installation:
 2)	Create conda enviroment : 
 conda env create --file environment.yml
 3)	Activate conda environment: 
-conda activate xmass_py36
+conda activate xmass_py37
 4)	Run the Flask application
 python main.py
